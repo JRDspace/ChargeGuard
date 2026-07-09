@@ -1,0 +1,29 @@
+{
+  "name": "chargeguard",
+  "version": "1.0.0",
+  "description": "Laptop battery charge limiter for WiZ smart plugs.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "ui": "node src/index.js --ui",
+    "package": "node scripts/build-packages.js",
+    "check": "node --test",
+    "test": "node --test"
+  },
+  "bin": {
+    "chargeguard": "src/index.js"
+  },
+  "keywords": [
+    "battery",
+    "charger",
+    "wiz",
+    "smart-plug"
+  ],
+  "author": "Janaki Rajesh D. <janakirajeshduvvuri@outlook.com> (https://janakirajesh.com)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JRDspace/ChargeGuard.git"
+  },
+  "homepage": "https://github.com/JRDspace/ChargeGuard",
+  "license": "MIT"
+}
