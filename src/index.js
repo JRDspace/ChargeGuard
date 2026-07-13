@@ -76,7 +76,7 @@ function explanationLines() {
     `- At ${high}% or above, it disconnects the charger by turning the WiZ plug off.`,
     `- At ${low}% or below, it connects the charger by turning the WiZ plug on.`,
     `- Between ${low}% and ${high}%, it keeps the charger as-is: charging continues up to ${high}%, and after disconnecting it stays off until ${low}%.`,
-    "- Automatic mode starts this in the background after Windows login.",
+    "- Automatic mode starts this in the background immediately when installed and again after every login.",
     "- Manual mode only sends one command; automatic mode is what keeps watching.",
     `- On Windows shutdown and sleep, it disconnects the charger, unless battery is at or below ${low}%: then it stays connected so the laptop can charge while off and can always boot.`,
     "- On wake, it checks once immediately.",
@@ -172,6 +172,10 @@ async function setAutomaticMode(enabled) {
   if (enabled && !process.env.WIZ_PLUG_IP) throw new Error("Run Setup first so automatic mode has a plug IP.");
   const [file, args] = platformScript(enabled ? "install" : "uninstall");
   const out = await run(file, args);
+  // Linux/macOS installers start the service themselves; the Windows one only
+  // registers login/shutdown hooks, so start monitoring now instead of after
+  // the next login. The lock file makes this a no-op if a daemon already runs.
+  if (enabled && os.platform() === "win32") startBackgroundDaemon();
   const message = out || (enabled ? "Automatic mode installed." : "Automatic mode disabled.");
   console.log(message);
   return message;

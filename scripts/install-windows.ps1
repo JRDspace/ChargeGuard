@@ -4,7 +4,7 @@ $node = (Get-Command node).Source
 $startup = [Environment]::GetFolderPath("Startup")
 $startupCmd = Join-Path $startup "ChargeGuard.cmd"
 Remove-Item $startupCmd -Force -ErrorAction SilentlyContinue
-"@echo off`r`ncd /d `"$root`"`r`n:loop`r`n`"$node`" `"$root\src\index.js`" --daemon`r`ntimeout /t 10 /nobreak >nul`r`ngoto loop`r`n" | Set-Content -Encoding ASCII $startupCmd
+"@echo off`r`ncd /d `"$root`"`r`n:loop`r`n`"$node`" `"$root\src\index.js`" --daemon`r`ntimeout /t 60 /nobreak >nul`r`ngoto loop`r`n" | Set-Content -Encoding ASCII $startupCmd
 Write-Host "Installed auto connect/disconnect: $startupCmd"
 schtasks /Create /TN "ChargeGuardOff" /TR "`"$node`" `"$root\scripts\chargeguard-off.js`"" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='USER32'] and EventID=1074]]" /F
 if ($LASTEXITCODE -ne 0) {
