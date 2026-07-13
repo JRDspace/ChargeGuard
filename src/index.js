@@ -78,7 +78,8 @@ function explanationLines() {
     `- Between ${low}% and ${high}%, it keeps the charger as-is: charging continues up to ${high}%, and after disconnecting it stays off until ${low}%.`,
     "- Automatic mode starts this in the background after Windows login.",
     "- Manual mode only sends one command; automatic mode is what keeps watching.",
-    "- On Windows sleep, it tries to disconnect the charger; on wake, it checks once immediately.",
+    `- On Windows shutdown and sleep, it disconnects the charger, unless battery is at or below ${low}%: then it stays connected so the laptop can charge while off and can always boot.`,
+    "- On wake, it checks once immediately.",
     `- Logs are written to ${LOG_FILE}.`,
     "- Disable automatic mode stops future background starts; it does not delete your settings.",
     ""
@@ -102,6 +103,17 @@ function printSetupSteps() {
 
 function envText(values) {
   return Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n") + "\n";
+}
+
+// A hand-written .env may contain only WIZ_PLUG_IP; missing or blank keys
+// must fall back to defaults instead of failing validation as NaN.
+function effectiveSettings() {
+  const merged = { ...DEFAULTS };
+  for (const key of Object.keys(DEFAULTS)) {
+    const value = process.env[key];
+    if (value !== undefined && String(value).trim() !== "") merged[key] = value;
+  }
+  return merged;
 }
 
 function validateSettings(values) {
@@ -130,6 +142,9 @@ function takeLock() {
   try {
     const fd = fs.openSync(LOCK_FILE, "wx");
     fs.writeFileSync(fd, String(process.pid));
+    // Close the handle, or Windows refuses the unlink in the exit handler
+    // and every run leaves a stale lock behind.
+    fs.closeSync(fd);
     process.on("exit", () => { try { fs.unlinkSync(LOCK_FILE); } catch (_err) {} });
   } catch (_err) {
     throw new Error("ChargeGuard is already running.");
@@ -254,7 +269,9 @@ async function statusData() {
   };
 }
 
-async function turnOffAndExit(code = 0) {
+// Exits without touching the plug: shutdown/sleep plug handling is done by
+// the ChargeGuardOff/ChargeGuardSleep scheduled tasks (scripts/chargeguard-off.js).
+async function stopAndExit(code = 0) {
   log("ChargeGuard stopped");
   process.exit(code);
 }
@@ -302,7 +319,7 @@ async function startDaemon() {
     process.exit(1);
   }
   takeLock();
-  validateSettings(process.env);
+  validateSettings(effectiveSettings());
   // The first check often runs right after login, before WiFi is up; a
   // transient failure must not kill the daemon.
   await tick().catch((err) => {
@@ -316,7 +333,7 @@ async function startDaemon() {
 }
 
 async function runOnce() {
-  validateSettings(process.env);
+  validateSettings(effectiveSettings());
   await tick();
 }
 
@@ -599,11 +616,11 @@ async function menu() {
   }
 }
 
-process.on("SIGINT", () => turnOffAndExit(0));
-process.on("SIGTERM", () => turnOffAndExit(0));
+process.on("SIGINT", () => stopAndExit(0));
+process.on("SIGTERM", () => stopAndExit(0));
 process.on("uncaughtException", (err) => {
   error(err.stack || err.message);
-  turnOffAndExit(1);
+  stopAndExit(1);
 });
 
 const boot = process.argv.includes("--status") ? showStatus() : process.argv.includes("--ui") ? startUi() : process.argv.includes("--once") ? runOnce() : process.argv.includes("--daemon") || !process.stdin.isTTY ? startDaemon() : menu();
