@@ -52,6 +52,17 @@ if %ERRORLEVEL% EQU 0 echo Installed wake battery check
 schtasks /Create /TN "ChargeGuardResumeMS" /TR "\"%NODE%\" \"%ROOT%\src\index.js\" --once" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=507]]" /F >nul 2>nul
 if %ERRORLEVEL% EQU 0 echo Installed modern-standby wake battery check
 
+rem Watchdog: revive the daemon within 5 minutes if it ever dies. The lock
+rem file makes this a no-op while the daemon is running.
+schtasks /Create /TN "ChargeGuardWatchdog" /TR "\"%NODE%\" \"%ROOT%\src\index.js\" --daemon" /SC MINUTE /MO 5 /F >nul 2>nul
+if %ERRORLEVEL% EQU 0 echo Installed monitoring watchdog
+
+rem Windows tasks default to "start only on AC power" and "stop when switching
+rem to battery" - fatal for a tool whose job is cutting AC power. Also remove
+rem the 72-hour execution limit that would kill a long-running daemon.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero); foreach($n in @('ChargeGuardOff','ChargeGuardSleep','ChargeGuardSleepMS','ChargeGuardResume','ChargeGuardResumeMS','ChargeGuardWatchdog')){ try { Set-ScheduledTask -TaskName $n -Settings $set -ErrorAction Stop | Out-Null } catch {} }" >nul 2>nul
+echo Allowed ChargeGuard tasks to run on battery power
+
 echo Running immediate battery check...
 "%NODE%" "%ROOT%\src\index.js" --once
 if %ERRORLEVEL% EQU 0 (
@@ -60,6 +71,13 @@ if %ERRORLEVEL% EQU 0 (
   echo Immediate battery check could not complete. Open ChargeGuard status for details.
 )
 
-start "ChargeGuard" /min "%NODE%" "%ROOT%\src\index.js" --daemon
-echo Background monitoring started.
+rem Start the daemon through Task Scheduler so it is not a child of this
+rem installer and survives whatever launched the install.
+schtasks /Run /TN "ChargeGuardWatchdog" >nul 2>nul
+if %ERRORLEVEL% EQU 0 (
+  echo Background monitoring started.
+) else (
+  start "ChargeGuard" /min "%NODE%" "%ROOT%\src\index.js" --daemon
+  echo Background monitoring started.
+)
 echo Done.

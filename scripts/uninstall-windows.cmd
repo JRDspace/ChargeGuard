@@ -12,6 +12,7 @@ schtasks /Query /TN "ChargeGuard" >nul 2>nul && set "FOUND=1"
 schtasks /Query /TN "ChargeGuardOff" >nul 2>nul && set "FOUND=1"
 schtasks /Query /TN "ChargeGuardSleep" >nul 2>nul && set "FOUND=1"
 schtasks /Query /TN "ChargeGuardResume" >nul 2>nul && set "FOUND=1"
+schtasks /Query /TN "ChargeGuardWatchdog" >nul 2>nul && set "FOUND=1"
 if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ChargeGuard.cmd" set "FOUND=1"
 
 if not defined FOUND (
@@ -27,6 +28,7 @@ schtasks /Delete /TN "ChargeGuardSleep" /F >nul 2>nul
 schtasks /Delete /TN "ChargeGuardSleepMS" /F >nul 2>nul
 schtasks /Delete /TN "ChargeGuardResume" /F >nul 2>nul
 schtasks /Delete /TN "ChargeGuardResumeMS" /F >nul 2>nul
+schtasks /Delete /TN "ChargeGuardWatchdog" /F >nul 2>nul
 
 del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ChargeGuard.cmd" >nul 2>nul
 del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\ChargeGuard.lnk" >nul 2>nul
