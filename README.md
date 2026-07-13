@@ -129,7 +129,7 @@ Use the menu to install or disable automatic mode.
 Uninstall:
 
 ```powershell
-.\scripts\uninstall-windows.ps1
+.\scripts\uninstall-windows.cmd
 ```
 
 ## Linux

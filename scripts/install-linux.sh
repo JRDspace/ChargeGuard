@@ -18,5 +18,8 @@ WantedBy=default.target
 EOF
 systemctl --user daemon-reload
 systemctl --user enable --now chargeguard.service
+# enable --now does not restart an already-running service, so force a
+# restart to pick up new code and settings on reinstall.
+systemctl --user restart chargeguard.service
 loginctl enable-linger "$USER" >/dev/null 2>&1 || true
 echo "Installed chargeguard.service"

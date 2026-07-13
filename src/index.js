@@ -145,7 +145,13 @@ function takeLock() {
     // Close the handle, or Windows refuses the unlink in the exit handler
     // and every run leaves a stale lock behind.
     fs.closeSync(fd);
-    process.on("exit", () => { try { fs.unlinkSync(LOCK_FILE); } catch (_err) {} });
+    process.on("exit", () => {
+      // Only remove the lock if it is still ours; a replacement daemon may
+      // have re-created it after stopping this one.
+      try {
+        if (fs.readFileSync(LOCK_FILE, "utf8") === String(process.pid)) fs.unlinkSync(LOCK_FILE);
+      } catch (_err) {}
+    });
   } catch (_err) {
     throw new Error("ChargeGuard is already running.");
   }
@@ -172,10 +178,6 @@ async function setAutomaticMode(enabled) {
   if (enabled && !process.env.WIZ_PLUG_IP) throw new Error("Run Setup first so automatic mode has a plug IP.");
   const [file, args] = platformScript(enabled ? "install" : "uninstall");
   const out = await run(file, args);
-  // Linux/macOS installers start the service themselves; the Windows one only
-  // registers login/shutdown hooks, so start monitoring now instead of after
-  // the next login. The lock file makes this a no-op if a daemon already runs.
-  if (enabled && os.platform() === "win32") startBackgroundDaemon();
   const message = out || (enabled ? "Automatic mode installed." : "Automatic mode disabled.");
   console.log(message);
   return message;
@@ -228,6 +230,7 @@ async function setupWizard(rl, offerAuto = true) {
   Object.assign(process.env, current);
   reloadSettings();
   console.log(`Saved ${ENV_FILE}`);
+  if (await restartDaemonIfRunning()) console.log("Restarted background monitoring with the new settings.");
   if (offerAuto) {
     const install = (await rl.question("Install automatic mode now? y/N: ")).trim().toLowerCase();
     if (install === "y" || install === "yes") await setAutomaticMode(true);
@@ -339,6 +342,47 @@ async function startDaemon() {
 async function runOnce() {
   validateSettings(effectiveSettings());
   await tick();
+}
+
+// Stop the daemon identified by the lock file, verifying it really is a
+// ChargeGuard process before killing. Returns true if one was stopped.
+async function stopRunningDaemon() {
+  let pid = NaN;
+  try {
+    pid = Number(fs.readFileSync(LOCK_FILE, "utf8"));
+  } catch (_err) {
+    return false;
+  }
+  if (!Number.isFinite(pid) || pid === process.pid) return false;
+  try {
+    process.kill(pid, 0);
+  } catch (_err) {
+    return false;
+  }
+  let cmdline = "";
+  if (os.platform() === "win32") {
+    cmdline = await run("powershell", ["-NoProfile", "-NonInteractive", "-Command", `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`]).catch(() => "");
+  } else {
+    cmdline = await run("ps", ["-p", String(pid), "-o", "args="]).catch(() => "");
+  }
+  if (!cmdline.includes("index.js")) return false;
+  try {
+    process.kill(pid);
+  } catch (_err) {
+    return false;
+  }
+  try { fs.unlinkSync(LOCK_FILE); } catch (_err) {}
+  return true;
+}
+
+// New settings only apply to newly started processes, so bounce the daemon
+// if one is running.
+async function restartDaemonIfRunning() {
+  if (await stopRunningDaemon()) {
+    startBackgroundDaemon();
+    return true;
+  }
+  return false;
 }
 
 function startBackgroundDaemon() {
@@ -510,14 +554,14 @@ async function startUi() {
           fs.writeFileSync(ENV_FILE, envText(Object.fromEntries(Object.keys(DEFAULTS).map((key) => [key, next[key] || DEFAULTS[key]]))));
           Object.assign(process.env, updates);
           reloadSettings();
-          message = "Setup saved.";
+          message = (await restartDaemonIfRunning()) ? "Setup saved. Background monitoring restarted with the new settings." : "Setup saved.";
         } else if (url.pathname === "/install") {
           const out = await setAutomaticMode(true);
           message = `${out || "Automatic mode installed."}\n\nChargeGuard also ran an immediate battery check. If battery is already at or above ${high}%, the charger should disconnect now.`;
         }
         else if (url.pathname === "/disable") {
           const out = await setAutomaticMode(false);
-          message = out || "Automatic mode disabled. Future background starts are off.";
+          message = out || "Automatic mode disabled and monitoring stopped.";
         }
         else if (url.pathname === "/detect") {
           const ip = await discoverPlug();
