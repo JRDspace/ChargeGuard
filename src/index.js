@@ -185,9 +185,9 @@ async function setAutomaticMode(enabled) {
 
 async function automaticStatus() {
   if (os.platform() === "win32") {
-    const startupCmd = path.join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "ChargeGuard.cmd");
-    if (fs.existsSync(startupCmd)) return "installed (Startup folder)";
-    const out = await run("schtasks", ["/Query", "/TN", "ChargeGuard", "/FO", "LIST"]).catch(() => "");
+    const startupDir = path.join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Startup");
+    if (fs.existsSync(path.join(startupDir, "ChargeGuard.vbs")) || fs.existsSync(path.join(startupDir, "ChargeGuard.cmd"))) return "installed (Startup folder)";
+    const out = await run("schtasks", ["/Query", "/TN", "ChargeGuardWatchdog", "/FO", "LIST"]).catch(() => "");
     return out ? "installed (Scheduled Task)" : "not installed";
   }
   if (os.platform() === "linux") {

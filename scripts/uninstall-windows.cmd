@@ -14,6 +14,7 @@ schtasks /Query /TN "ChargeGuardSleep" >nul 2>nul && set "FOUND=1"
 schtasks /Query /TN "ChargeGuardResume" >nul 2>nul && set "FOUND=1"
 schtasks /Query /TN "ChargeGuardWatchdog" >nul 2>nul && set "FOUND=1"
 if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ChargeGuard.cmd" set "FOUND=1"
+if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ChargeGuard.vbs" set "FOUND=1"
 
 if not defined FOUND (
   echo ChargeGuard automatic mode is not installed.
@@ -31,6 +32,7 @@ schtasks /Delete /TN "ChargeGuardResumeMS" /F >nul 2>nul
 schtasks /Delete /TN "ChargeGuardWatchdog" /F >nul 2>nul
 
 del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ChargeGuard.cmd" >nul 2>nul
+del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ChargeGuard.vbs" >nul 2>nul
 del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\ChargeGuard.lnk" >nul 2>nul
 del "%USERPROFILE%\Desktop\ChargeGuard.lnk" >nul 2>nul
 
