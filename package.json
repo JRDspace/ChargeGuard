@@ -1,6 +1,6 @@
 {
   "name": "chargeguard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Laptop battery charge limiter for WiZ smart plugs.",
   "main": "src/index.js",
   "scripts": {

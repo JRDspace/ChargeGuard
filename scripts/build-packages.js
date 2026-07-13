@@ -170,9 +170,13 @@ function archive(platform, dir) {
     execFileSync("powershell", ["-NoProfile", "-Command", `Compress-Archive -Path '${dir}\\*' -DestinationPath '${zip}' -Force`], { stdio: "inherit" });
     return zip;
   }
-  const tgz = path.join(dist, `${path.basename(dir)}.tar.gz`);
+  const name = `${path.basename(dir)}.tar.gz`;
+  const tgz = path.join(dist, name);
   fs.rmSync(tgz, { force: true });
-  execFileSync("tar", ["-czf", tgz, "-C", path.dirname(dir), path.basename(dir)], { stdio: "inherit" });
+  // GNU tar treats "D:\..." as a remote host, so keep every tar path
+  // relative and copy the result into dist afterwards.
+  execFileSync("tar", ["-czf", name, path.basename(dir)], { cwd: path.dirname(dir), stdio: "inherit" });
+  fs.copyFileSync(path.join(path.dirname(dir), name), tgz);
   return tgz;
 }
 

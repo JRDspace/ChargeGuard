@@ -18,9 +18,9 @@ It uses Node.js built-ins only and the local WiZ UDP API.
 
 Download the bundle for your OS:
 
-- [Download for Windows](https://github.com/JRDspace/ChargeGuard/releases/latest/download/ChargeGuard-1.0.0-windows.zip)
-- [Download for Linux](https://github.com/JRDspace/ChargeGuard/releases/latest/download/ChargeGuard-1.0.0-linux.tar.gz)
-- [Download for macOS](https://github.com/JRDspace/ChargeGuard/releases/latest/download/ChargeGuard-1.0.0-macos.tar.gz)
+- [Download for Windows](https://github.com/JRDspace/ChargeGuard/releases/latest/download/ChargeGuard-1.0.1-windows.zip)
+- [Download for Linux](https://github.com/JRDspace/ChargeGuard/releases/latest/download/ChargeGuard-1.0.1-linux.tar.gz)
+- [Download for macOS](https://github.com/JRDspace/ChargeGuard/releases/latest/download/ChargeGuard-1.0.1-macos.tar.gz)
 
 Windows:
 
