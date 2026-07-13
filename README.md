@@ -4,7 +4,7 @@ ChargeGuard auto connects and disconnects a laptop charger through a WiZ smart p
 
 - `80%` or above: disconnect charger
 - `20%` or below: connect charger
-- between those values: keep the charger disconnected until it reaches the lower limit
+- between those values: keep the charger as it is, so charging continues up to `80%`, and after disconnecting it stays off until `20%`
 
 It uses Node.js built-ins only and the local WiZ UDP API.
 

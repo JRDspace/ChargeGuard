@@ -31,12 +31,16 @@ let plugOn = true;
 const metrics = { started: Date.now(), checks: 0, switches: 0, lastBattery: null, lastError: "" };
 
 function writeLog(line) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 1024 * 1024) {
-    try { fs.unlinkSync(`${LOG_FILE}.1`); } catch (_err) {}
-    fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);
-  }
-  fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${line}\n`);
+  // Never throw: the daemon, wake task, and UI can log concurrently, and a
+  // logging failure must not take down charging control.
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 1024 * 1024) {
+      try { fs.unlinkSync(`${LOG_FILE}.1`); } catch (_err) {}
+      try { fs.renameSync(LOG_FILE, `${LOG_FILE}.1`); } catch (_err) {}
+    }
+    fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${line}\n`);
+  } catch (_err) {}
 }
 
 function log(message) {
@@ -71,7 +75,7 @@ function explanationLines() {
     `- ChargeGuard checks the battery every ${pollMs / 1000} seconds.`,
     `- At ${high}% or above, it disconnects the charger by turning the WiZ plug off.`,
     `- At ${low}% or below, it connects the charger by turning the WiZ plug on.`,
-    `- Between ${low}% and ${high}%, it keeps the charger disconnected until the battery reaches ${low}%.`,
+    `- Between ${low}% and ${high}%, it keeps the charger as-is: charging continues up to ${high}%, and after disconnecting it stays off until ${low}%.`,
     "- Automatic mode starts this in the background after Windows login.",
     "- Manual mode only sends one command; automatic mode is what keeps watching.",
     "- On Windows sleep, it tries to disconnect the charger; on wake, it checks once immediately.",
@@ -255,21 +259,32 @@ async function turnOffAndExit(code = 0) {
   process.exit(code);
 }
 
+let ticking = false;
+
 async function tick() {
-  const battery = await getBattery();
-  if (!battery) throw new Error("No laptop battery found");
-  const current = await getPlug();
-  metrics.checks += 1;
-  metrics.lastBattery = battery;
-  const next = nextPlugState(battery.percent, current, low, high);
-  if (next !== current) {
-    plugOn = await setPlug(next);
-    metrics.switches += 1;
-  } else {
-    plugOn = current;
+  // A slow tick (UDP retries + battery query) can outlast the poll interval;
+  // never run two at once or they send conflicting plug commands.
+  if (ticking) return;
+  ticking = true;
+  try {
+    const battery = await getBattery();
+    if (!battery) throw new Error("No laptop battery found");
+    const current = await getPlug();
+    metrics.checks += 1;
+    metrics.lastBattery = battery;
+    const next = nextPlugState(battery.percent, current, low, high);
+    if (next !== current) {
+      plugOn = await setPlug(next);
+      metrics.switches += 1;
+    } else {
+      plugOn = current;
+    }
+    metrics.lastError = "";
+    if (plugOn && battery.charging === false) error("charger is connected but Windows says the laptop is not charging; check cable/socket");
+    log(`battery=${battery.percent}% state=${battery.state || "unknown"} charger=${plugOn ? "on" : "off"} checks=${metrics.checks} switches=${metrics.switches} uptime=${uptime()}`);
+  } finally {
+    ticking = false;
   }
-  if (plugOn && battery.charging === false) error("charger is connected but Windows says the laptop is not charging; check cable/socket");
-  log(`battery=${battery.percent}% state=${battery.state || "unknown"} charger=${plugOn ? "on" : "off"} checks=${metrics.checks} switches=${metrics.switches} uptime=${uptime()}`);
 }
 
 async function runMenuAction(action) {
@@ -288,7 +303,12 @@ async function startDaemon() {
   }
   takeLock();
   validateSettings(process.env);
-  await tick();
+  // The first check often runs right after login, before WiFi is up; a
+  // transient failure must not kill the daemon.
+  await tick().catch((err) => {
+    metrics.lastError = err.message;
+    error(err.message);
+  });
   setInterval(() => tick().catch((err) => {
     metrics.lastError = err.message;
     error(err.message);
@@ -317,11 +337,38 @@ function openBrowser(url) {
 }
 
 function readBody(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk) => { body += chunk; });
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 64 * 1024) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+      }
+    });
     req.on("end", () => resolve(querystring.parse(body)));
+    req.on("error", (err) => reject(err));
   });
+}
+
+function isLoopbackHost(value) {
+  const host = String(value || "").toLowerCase().replace(/:\d+$/, "");
+  return host === "127.0.0.1" || host === "localhost" || host === "[::1]";
+}
+
+// Reject requests that did not come from this machine's own browser tab:
+// a Host header pointing elsewhere means DNS rebinding, and a non-loopback
+// Origin on a POST means a cross-site form on a website we do not control.
+function isTrustedRequest(req) {
+  if (!isLoopbackHost(req.headers.host)) return false;
+  if (req.method === "POST" && req.headers.origin) {
+    try {
+      return isLoopbackHost(new URL(req.headers.origin).host);
+    } catch (_err) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function page(status, message = "") {
@@ -415,6 +462,10 @@ async function startUi() {
   }
   const server = http.createServer(async (req, res) => {
     try {
+      if (!isTrustedRequest(req)) {
+        res.writeHead(403, { "content-type": "text/plain" });
+        return res.end("Forbidden: ChargeGuard UI only accepts local requests.");
+      }
       const url = new URL(req.url, "http://127.0.0.1");
       if (req.method === "GET" && url.pathname === "/favicon.svg") {
         res.writeHead(200, { "content-type": "image/svg+xml" });
@@ -429,10 +480,14 @@ async function startUi() {
         const body = req.method === "POST" ? await readBody(req) : {};
         if (url.pathname === "/setup") {
           if (req.method !== "POST") throw new Error("Use the setup form to save settings.");
-          const next = { ...process.env, ...body };
+          const updates = {};
+          for (const key of Object.keys(DEFAULTS)) {
+            if (body[key] !== undefined) updates[key] = String(body[key]).trim();
+          }
+          const next = { ...process.env, ...updates };
           validateSettings(next);
           fs.writeFileSync(ENV_FILE, envText(Object.fromEntries(Object.keys(DEFAULTS).map((key) => [key, next[key] || DEFAULTS[key]]))));
-          Object.assign(process.env, body);
+          Object.assign(process.env, updates);
           reloadSettings();
           message = "Setup saved.";
         } else if (url.pathname === "/install") {

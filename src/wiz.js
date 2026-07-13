@@ -4,6 +4,7 @@ const WIZ_PORT = Number(process.env.WIZ_PLUG_PORT || 38899);
 const WIZ_TIMEOUT_MS = Math.max(Number(process.env.WIZ_TIMEOUT_MS || 2000), 500);
 const WIZ_RETRIES = Math.max(Number(process.env.WIZ_RETRIES || 3), 1);
 let discoveredIp = "";
+let discoveredForIp = "";
 
 function send(ip, payload) {
   return new Promise((resolve, reject) => {
@@ -77,7 +78,14 @@ function discoverPlug() {
 }
 
 function plugIp() {
-  const ip = discoveredIp || (process.env.WIZ_PLUG_IP || "").trim();
+  const envIp = (process.env.WIZ_PLUG_IP || "").trim();
+  // A rediscovered IP only stands in for the configured IP it replaced;
+  // when the user configures a new IP, the cache is stale.
+  if (discoveredIp && discoveredForIp !== envIp) {
+    discoveredIp = "";
+    discoveredForIp = "";
+  }
+  const ip = discoveredIp || envIp;
   if (!ip) throw new Error([
     "WiZ plug IP is not configured.",
     "Run `npm start`, choose Setup, then enter the plug IP from the WiZ app or your router.",
@@ -93,6 +101,7 @@ async function command(payload) {
     const ip = await discoverPlug();
     if (!ip) throw err;
     discoveredIp = ip;
+    discoveredForIp = (process.env.WIZ_PLUG_IP || "").trim();
     return sendWithRetry(ip, payload);
   }
 }
