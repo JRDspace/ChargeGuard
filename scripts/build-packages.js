@@ -25,6 +25,7 @@ const files = [
   "scripts/chargeguard-off.js",
   "scripts/install-windows.cmd",
   "scripts/uninstall-windows.cmd",
+  "scripts/run-hidden.vbs",
   "scripts/install-linux.sh",
   "scripts/uninstall-linux.sh",
   "scripts/install-macos.sh",
@@ -94,7 +95,7 @@ function stage(platform) {
   rm(target);
   fs.mkdirSync(target, { recursive: true });
   for (const file of files) {
-    if (platform !== "windows" && (file.endsWith(".cmd") || file.endsWith(".ps1"))) continue;
+    if (platform !== "windows" && (file.endsWith(".cmd") || file.endsWith(".ps1") || file.endsWith(".vbs"))) continue;
     if (platform === "windows" && file.endsWith(".sh")) continue;
     copyFile(file, target);
   }

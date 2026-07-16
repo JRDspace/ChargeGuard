@@ -16,6 +16,7 @@ set "STARTUP_VBS=%STARTUP%\ChargeGuard.vbs"
 set "SHORTCUT=%APPDATA%\Microsoft\Windows\Start Menu\Programs\ChargeGuard.lnk"
 set "DESKTOP_SHORTCUT=%USERPROFILE%\Desktop\ChargeGuard.lnk"
 set "ICON=%ROOT%\assets\chargeguard.ico"
+set "HIDE=wscript.exe \"%ROOT%\scripts\run-hidden.vbs\""
 
 rem Stop any running ChargeGuard monitoring, wherever it was installed from,
 rem so the new install fully replaces old code and old settings.
@@ -37,24 +38,24 @@ if exist "%ROOT%\ChargeGuard.cmd" (
   if not errorlevel 1 echo Installed Start Menu and Desktop shortcuts.
 )
 
-schtasks /Create /TN "ChargeGuardOff" /TR "\"%NODE%\" \"%ROOT%\scripts\chargeguard-off.js\"" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='USER32'] and EventID=1074]]" /F >nul 2>nul
+schtasks /Create /TN "ChargeGuardOff" /TR "%HIDE% \"%NODE%\" \"%ROOT%\scripts\chargeguard-off.js\"" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='USER32'] and EventID=1074]]" /F >nul 2>nul
 if %ERRORLEVEL% EQU 0 echo Installed Windows-exit charger disconnect
 
-schtasks /Create /TN "ChargeGuardSleep" /TR "\"%NODE%\" \"%ROOT%\scripts\chargeguard-off.js\"" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=42]]" /F >nul 2>nul
+schtasks /Create /TN "ChargeGuardSleep" /TR "%HIDE% \"%NODE%\" \"%ROOT%\scripts\chargeguard-off.js\"" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=42]]" /F >nul 2>nul
 if %ERRORLEVEL% EQU 0 echo Installed sleep charger disconnect
 
-schtasks /Create /TN "ChargeGuardSleepMS" /TR "\"%NODE%\" \"%ROOT%\scripts\chargeguard-off.js\"" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=506]]" /F >nul 2>nul
+schtasks /Create /TN "ChargeGuardSleepMS" /TR "%HIDE% \"%NODE%\" \"%ROOT%\scripts\chargeguard-off.js\"" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=506]]" /F >nul 2>nul
 if %ERRORLEVEL% EQU 0 echo Installed modern-standby sleep charger disconnect
 
-schtasks /Create /TN "ChargeGuardResume" /TR "\"%NODE%\" \"%ROOT%\src\index.js\" --once" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Power-Troubleshooter'] and EventID=1]]" /F >nul 2>nul
+schtasks /Create /TN "ChargeGuardResume" /TR "%HIDE% \"%NODE%\" \"%ROOT%\src\index.js\" --once" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Power-Troubleshooter'] and EventID=1]]" /F >nul 2>nul
 if %ERRORLEVEL% EQU 0 echo Installed wake battery check
 
-schtasks /Create /TN "ChargeGuardResumeMS" /TR "\"%NODE%\" \"%ROOT%\src\index.js\" --once" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=507]]" /F >nul 2>nul
+schtasks /Create /TN "ChargeGuardResumeMS" /TR "%HIDE% \"%NODE%\" \"%ROOT%\src\index.js\" --once" /SC ONEVENT /EC System /MO "*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=507]]" /F >nul 2>nul
 if %ERRORLEVEL% EQU 0 echo Installed modern-standby wake battery check
 
 rem Watchdog: revive the daemon within 5 minutes if it ever dies. The lock
 rem file makes this a no-op while the daemon is running.
-schtasks /Create /TN "ChargeGuardWatchdog" /TR "\"%NODE%\" \"%ROOT%\src\index.js\" --daemon" /SC MINUTE /MO 5 /F >nul 2>nul
+schtasks /Create /TN "ChargeGuardWatchdog" /TR "%HIDE% \"%NODE%\" \"%ROOT%\src\index.js\" --daemon" /SC MINUTE /MO 5 /F >nul 2>nul
 if %ERRORLEVEL% EQU 0 echo Installed monitoring watchdog
 
 rem Windows tasks default to "start only on AC power" and "stop when switching
